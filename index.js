@@ -43,23 +43,71 @@ async function run() {
 
     // auth related
     app.post("/signup", async (req, res) => {
-      console.log(req.body);
-      const { firstName, lastName, email, password, phone, terms } = req.body;
-      const existingUser = await userCollection.findOne({ email });
-      if (existingUser) return res.status(400).send("Email already exists");
-      const hashedPassword = await bcrypt.hash(password, 10);
-      await userCollection.insertOne({
-        firstName,
-        lastName,
-        email,
-        phone,
-        password: hashedPassword,
-        terms,
-        role: "user",
-        createdAt: new Date(),
-      });
+      try {
+        console.log(req.body);
+        const { firstName, lastName, email, password, phone, terms, photo } =
+          req.body;
 
-      res.send("Signup successful");
+        const existingUser = await userCollection.findOne({ email });
+        if (existingUser) return res.status(400).send("Email already exists");
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = {
+          firstName,
+          lastName,
+          email,
+          phone,
+          photo,
+          password: hashedPassword,
+          terms,
+          role: "user",
+          createdAt: new Date(),
+        };
+
+        const result = await userCollection.insertOne(newUser);
+
+        // remove password before sending
+        const userToSend = { ...newUser };
+        delete userToSend.password;
+        userToSend._id = result.insertedId;
+
+        res.status(200).json({
+          success: true,
+          message: "Sign Up successful",
+          user: userToSend,
+        });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send("Server error");
+      }
+    });
+    
+
+    // social-login
+    app.post("/social-login", async (req, res) => {
+      const { firstName, lastName, email, phone,photo, terms, provider } = req.body;
+      let user = await userCollection.findOne({ email });
+
+      if (!user) {
+        const newUser = {
+          firstName,
+          lastName,
+          email,
+          provider,
+          terms,
+          phone,
+          photo,
+          role: "user",
+          createdAt: new Date(),
+        };
+        const result = await userCollection.insertOne(newUser);
+        user = { ...newUser, _id: result.insertedId };
+      }
+      res.json({
+        message: `Logged in with ${provider}`,
+        user,
+      });
     });
 
     app.post("/login", async (req, res) => {
